@@ -83,11 +83,11 @@ export class ModuleWorkspace {
   }
 
   /**
-   * Get reference information for developing with a Dagger SDK
+   * Get SDK reference information for developing with a Dagger SDK
    * @param sdk Dagger SDK language to get reference for
    */
   @func()
-  async getReference(sdk: string): Promise<string> {
+  async getSdkReference(sdk: string): Promise<string> {
     const daggerDocs = dag
       .git("https://github.com/dagger/dagger")
       .head()
@@ -122,6 +122,45 @@ export class ModuleWorkspace {
       reference += `\n${snippet}:\n<code>\n${code}\n</code>\n`;
     }
     return reference;
+  }
+
+  /**
+   * Get reference information on writing examples for a dagger module of a given SDK
+   * @param sdk Dagger SDK language to get reference for
+   */
+  @func()
+  getExamplesReference(sdk: string): string {
+    const exampleReference: { [key: string]: string } = {
+      go: `
+If you have a module called 'Foo' and a function called 'Bar', you can create the following functions in your example module:
+- A function 'Foo_Baz' will create a top level example for the 'Foo' module called Baz.
+- A function 'FooBar' will create an example for function 'Bar'.
+- Functions 'FooBar_Baz' will create a Baz example for the function 'Bar'.
+     `,
+      python: `
+If you have a module called 'foo' and a function called 'bar', you can create the following functions in your example module:
+- A function 'foo__baz' will create a top level example for the 'foo' module called baz.
+- A function 'foo_bar' will create an example for function 'bar'.
+- Functions 'foo_bar__baz' will create a baz example for the function 'bar'.
+note:
+Python function names in example modules use double underscores ('__') as separators since by convention, Python uses single underscores to represent spaces in function names (snake case).
+    `,
+      typescript: `
+If you have a module called 'foo' and a function called 'bar', you can create the following functions in your example module:
+- A function 'foo_baz' will create a top level example for the 'foo' module called baz.
+- A function 'fooBar' will create an example for function 'bar'.
+- Functions 'fooBar_baz' and will create a baz example for the function 'bar'.
+    `,
+      //       shell: ` // not used yet
+      // A Shell example must be a shell script located at '/examples/shell' within the module you're creating examples for.
+      // If you have a module called 'foo' and a function called 'bar', you can create the following script in your example directory:
+      // - A file 'foo_baz.sh' will create a top level example for the 'foo' module called baz.
+      // - A file 'foo_bar.sh' will create an example for function 'bar'.
+      // - Files 'foo_bar_baz.sh' and will create a baz example for the function 'bar'.
+      //     `,
+    };
+
+    return exampleReference[sdk];
   }
 
   // Helper to get the correct code path for a given SDK
