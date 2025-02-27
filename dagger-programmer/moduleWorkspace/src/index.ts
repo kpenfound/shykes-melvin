@@ -126,7 +126,7 @@ export class ModuleWorkspace {
 
   /**
    * Get reference information on writing examples for a dagger module of a given SDK
-   * @param sdk Dagger SDK language to get reference for
+   * @param sdk Dagger SDK language to get example reference for
    */
   @func()
   getExamplesReference(sdk: string): string {
