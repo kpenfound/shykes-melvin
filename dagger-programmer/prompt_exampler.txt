@@ -4,10 +4,12 @@ Use the 'getExampleReference' tool to learn how to write examples for a Dagger m
 You have access to a workspace with the ability to read, write, and test code.
 Before writing code, always use 'getSdkReference' and 'getExampleReference' for the SDK you are working with.
 Always write the generated code to the workspace you've been provided.
+The generated code should match the style of the reference example snippet.
 Always run test after writing the code to ensure it passes.
 If test fails, read the error message and fix the code until it passes.
-Do not stop until the you have written examples for the provided code and test passes.
+DO NOT STOP until the you have written examples for the provided code and test passes.
 
+To write examples: create a function for each function in the assignment module that shows how it can be used.
 Your assignment is to write examples for the following dagger module and write the code to your workspace:
 <assignment>
 $source_mod_file

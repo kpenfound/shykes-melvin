@@ -42,19 +42,20 @@ export class ModuleWorkspace {
     this.sdk = sdk;
     this.name = name;
     this.daggerVersion = daggerVersion;
-    this.workspace =
-      workspace ??
-      dag.directory().withNewFile(this.sdkFilePath(), "EMPTY FILE");
+    this.workspace = workspace ?? dag.directory();
   }
   /**
    * Writes the module code to the workspace
    * @param content The updated module code
    */
   @func()
-  write(content: string): ModuleWorkspace {
+  async write(content: string): Promise<ModuleWorkspace> {
     // NOTE: constraining this to the default file path for now to keep things simple
     // To develop module examples or more complicated modules, this will need to be unlocked
-    this.workspace = this.workspace.withNewFile(this.sdkFilePath(), content);
+    this.workspace = this.workspace.withNewFile(
+      await dag.moduleHelper().getSdkMainFile(this.sdk, this.name),
+      content,
+    );
     return this;
   }
 
@@ -63,7 +64,9 @@ export class ModuleWorkspace {
    */
   @func()
   async read(): Promise<string> {
-    return await this.workspace.file(this.sdkFilePath()).contents();
+    return await this.workspace
+      .file(await dag.moduleHelper().getSdkMainFile(this.sdk, this.name))
+      .contents();
   }
 
   /**
@@ -71,7 +74,7 @@ export class ModuleWorkspace {
    */
   @func()
   async test(): Promise<string> {
-    const dagger = this.daggerCommand();
+    const dagger = await this.daggerCommand();
     const functions = dagger.withExec(["/usr/local/bin/dagger", "functions"], {
       experimentalPrivilegedNesting: true,
       expect: ReturnType.Any,
@@ -114,12 +117,31 @@ export class ModuleWorkspace {
 
     // TODO: also include full sdk reference?
     let reference = `Reference for using Dagger with the ${sdk} SDK\n`;
-    reference += `The relevant code for a ${sdk} SDK module is at "${this.sdkFilePath(sdk)}"\n`;
+    reference += `\n
+    Assume 'dag' is available globally.
+    Object types directly translate to struct types, and have methods for each field.
+
+    <go>
+    dag.Container(). // *Container
+        WithExec([]string{"sh", "-c", "echo hey > ./some-file"}). // *Container
+        File("./some-file") // *File
+    </go>
+
+    Calling a method that returns an object type is always lazy, and never returns
+    an error:
+
+    <go>
+    myFile := dag.Container(). // *Container
+        WithExec([]string{"sh", "-c", "echo hey > ./some-file"}). // *Container
+        File("./some-file") // *File
+    </go>
+    \n`;
+    reference += `The relevant code for a ${sdk} SDK module is at "${await dag.moduleHelper().getSdkMainFile(sdk, "{module_name}")}"\n`;
     for (const snippet in snippets) {
       const code = await daggerDocs
         .file(`${snippets[snippet]}/${sdk}/${snippetSdkPaths[sdk]}`)
         .contents();
-      reference += `\n${snippet}:\n<code>\n${code}\n</code>\n`;
+      reference += `\n${snippet}:\n<module>\n${code}\n</module>\n`;
     }
     return reference;
   }
@@ -129,7 +151,21 @@ export class ModuleWorkspace {
    * @param sdk Dagger SDK language to get example reference for
    */
   @func()
-  getExamplesReference(sdk: string): string {
+  async getExamplesReference(sdk: string): Promise<string> {
+    const referenceSnippet = await dag
+      .git("https://github.com/kpenfound/dagger-modules")
+      .head()
+      .tree()
+      .directory("proxy/examples")
+      .directory(sdk)
+      .file(await dag.moduleHelper().getSdkMainFile(sdk, "proxy"))
+      .contents();
+    const exampleIntro = `
+A Dagger Example module is a normal Dagger module that calls the functions of the module you're creating examples for.
+An example module should look like any other Dagger module but it showcases how to call the functions of the module you're creating examples for.
+By adhering to the following function naming schemes, the functions will be properly associated with the functions
+in the module you are creating examples for.
+`;
     const exampleReference: { [key: string]: string } = {
       go: `
 If you have a module called 'Foo' and a function called 'Bar', you can create the following functions in your example module:
@@ -160,24 +196,11 @@ If you have a module called 'foo' and a function called 'bar', you can create th
       //     `,
     };
 
-    return exampleReference[sdk];
-  }
-
-  // Helper to get the correct code path for a given SDK
-  sdkFilePath(sdk?: string): string {
-    sdk = sdk ?? this.sdk;
-    const defaultFilePaths: { [key: string]: string } = {
-      go: "main.go",
-      python: `src/${this.name}/main.py`,
-      typescript: "src/index.ts",
-      php: `src/${this.name}.php`,
-      java: `src/main/java/io/dagger/modules/${this.name.toLowerCase()}/${this.name}.java`,
-    };
-    return defaultFilePaths[this.sdk];
+    return `${exampleIntro}\n${exampleReference[sdk]}\n\nThe following is an example module for the Proxy module:\n<example>${referenceSnippet}\n</example>\n`;
   }
 
   // Helper to get a container that can execute dagger commands on our module
-  daggerCommand(): Container {
+  async daggerCommand(): Promise<Container> {
     return dag
       .container()
       .from("alpine")
@@ -192,6 +215,11 @@ If you have a module called 'foo' and a function called 'bar', you can create th
       .withExec(["dagger", "init", "--name", this.name, "--sdk", this.sdk], {
         experimentalPrivilegedNesting: true,
       })
-      .withFile(this.sdkFilePath(), this.workspace.file(this.sdkFilePath()));
+      .withFile(
+        await dag.moduleHelper().getSdkMainFile(this.sdk, this.name),
+        this.workspace.file(
+          await dag.moduleHelper().getSdkMainFile(this.sdk, this.name),
+        ),
+      );
   }
 }
