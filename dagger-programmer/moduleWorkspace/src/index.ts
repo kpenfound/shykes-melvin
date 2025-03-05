@@ -19,6 +19,7 @@ export class ModuleWorkspace {
   workspace: Directory;
   sdk: string;
   name: string;
+  dependencies: Directory[];
   daggerVersion: string;
 
   constructor(
@@ -31,6 +32,10 @@ export class ModuleWorkspace {
      */
     name: string,
     /*
+     * module dependencies
+     */
+    dependencies: Directory[] = [],
+    /*
      * Dagger Version
      */
     daggerVersion = "latest",
@@ -41,6 +46,7 @@ export class ModuleWorkspace {
   ) {
     this.sdk = sdk;
     this.name = name;
+    this.dependencies = dependencies;
     this.daggerVersion = daggerVersion;
     this.workspace = workspace ?? dag.directory();
   }
@@ -82,7 +88,7 @@ export class ModuleWorkspace {
     if ((await functions.exitCode()) != 0) {
       return await functions.stderr();
     }
-    return await functions.stdout();
+    return "TEST PASSED"; // Just return passed. Functions output is confusing
   }
 
   /**
@@ -114,94 +120,38 @@ export class ModuleWorkspace {
       php: "src/MyModule.php",
       java: "src/main/java/io/dagger/modules/mymodule/MyModule.java",
     };
-
     // TODO: also include full sdk reference?
-    let reference = `Reference for using Dagger with the ${sdk} SDK\n`;
-    reference += `\n
-    Assume 'dag' is available globally.
-    Object types directly translate to struct types, and have methods for each field.
+    let reference = await dag
+      .currentModule()
+      .source()
+      .file(`knowledge/${sdk}_sdk.md`)
+      .contents();
 
-    <go>
-    dag.Container(). // *Container
-        WithExec([]string{"sh", "-c", "echo hey > ./some-file"}). // *Container
-        File("./some-file") // *File
-    </go>
-
-    Calling a method that returns an object type is always lazy, and never returns
-    an error:
-
-    <go>
-    myFile := dag.Container(). // *Container
-        WithExec([]string{"sh", "-c", "echo hey > ./some-file"}). // *Container
-        File("./some-file") // *File
-    </go>
-    \n`;
-    reference += `The relevant code for a ${sdk} SDK module is at "${await dag.moduleHelper().getSdkMainFile(sdk, "{module_name}")}"\n`;
+    reference += `\n\n## Reference snippets:\n\n`;
     for (const snippet in snippets) {
       const code = await daggerDocs
         .file(`${snippets[snippet]}/${sdk}/${snippetSdkPaths[sdk]}`)
         .contents();
-      reference += `\n${snippet}:\n<module>\n${code}\n</module>\n`;
+      reference += `\n${snippet}:\n<code>\n${code}\n</code>\n`;
     }
     return reference;
   }
 
   /**
-   * Get reference information on writing examples for a dagger module of a given SDK
-   * @param sdk Dagger SDK language to get example reference for
+   * Get reference information on writing an example module for a dagger module
    */
   @func()
-  async getExamplesReference(sdk: string): Promise<string> {
-    const referenceSnippet = await dag
-      .git("https://github.com/kpenfound/dagger-modules")
-      .head()
-      .tree()
-      .directory("proxy/examples")
-      .directory(sdk)
-      .file(await dag.moduleHelper().getSdkMainFile(sdk, "proxy"))
+  async getExamplesReference(): Promise<string> {
+    return await dag
+      .currentModule()
+      .source()
+      .file("knowledge/go_examples.md")
       .contents();
-    const exampleIntro = `
-A Dagger Example module is a normal Dagger module that calls the functions of the module you're creating examples for.
-An example module should look like any other Dagger module but it showcases how to call the functions of the module you're creating examples for.
-By adhering to the following function naming schemes, the functions will be properly associated with the functions
-in the module you are creating examples for.
-`;
-    const exampleReference: { [key: string]: string } = {
-      go: `
-If you have a module called 'Foo' and a function called 'Bar', you can create the following functions in your example module:
-- A function 'Foo_Baz' will create a top level example for the 'Foo' module called Baz.
-- A function 'FooBar' will create an example for function 'Bar'.
-- Functions 'FooBar_Baz' will create a Baz example for the function 'Bar'.
-     `,
-      python: `
-If you have a module called 'foo' and a function called 'bar', you can create the following functions in your example module:
-- A function 'foo__baz' will create a top level example for the 'foo' module called baz.
-- A function 'foo_bar' will create an example for function 'bar'.
-- Functions 'foo_bar__baz' will create a baz example for the function 'bar'.
-note:
-Python function names in example modules use double underscores ('__') as separators since by convention, Python uses single underscores to represent spaces in function names (snake case).
-    `,
-      typescript: `
-If you have a module called 'foo' and a function called 'bar', you can create the following functions in your example module:
-- A function 'foo_baz' will create a top level example for the 'foo' module called baz.
-- A function 'fooBar' will create an example for function 'bar'.
-- Functions 'fooBar_baz' and will create a baz example for the function 'bar'.
-    `,
-      //       shell: ` // not used yet
-      // A Shell example must be a shell script located at '/examples/shell' within the module you're creating examples for.
-      // If you have a module called 'foo' and a function called 'bar', you can create the following script in your example directory:
-      // - A file 'foo_baz.sh' will create a top level example for the 'foo' module called baz.
-      // - A file 'foo_bar.sh' will create an example for function 'bar'.
-      // - Files 'foo_bar_baz.sh' and will create a baz example for the function 'bar'.
-      //     `,
-    };
-
-    return `${exampleIntro}\n${exampleReference[sdk]}\n\nThe following is an example module for the Proxy module:\n<example>${referenceSnippet}\n</example>\n`;
   }
 
   // Helper to get a container that can execute dagger commands on our module
   async daggerCommand(): Promise<Container> {
-    return dag
+    let mod = dag
       .container()
       .from("alpine")
       .withExec(["apk", "add", "curl"])
@@ -214,12 +164,20 @@ If you have a module called 'foo' and a function called 'bar', you can create th
       .withWorkdir("/mod")
       .withExec(["dagger", "init", "--name", this.name, "--sdk", this.sdk], {
         experimentalPrivilegedNesting: true,
-      })
-      .withFile(
+      });
+    for (const dep of this.dependencies) {
+      const depName = "./" + (await dep.asModule().name());
+      mod = mod
+        .withDirectory(depName, dep)
+        .withExec(["dagger", "install", depName], {
+          experimentalPrivilegedNesting: true,
+        });
+    }
+    return mod.withFile(
+      await dag.moduleHelper().getSdkMainFile(this.sdk, this.name),
+      this.workspace.file(
         await dag.moduleHelper().getSdkMainFile(this.sdk, this.name),
-        this.workspace.file(
-          await dag.moduleHelper().getSdkMainFile(this.sdk, this.name),
-        ),
-      );
+      ),
+    );
   }
 }
