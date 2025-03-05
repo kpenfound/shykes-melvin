@@ -48,13 +48,14 @@ class DaggerProgrammer:
     ) -> Directory:
         """Writes examples in all supported languages for the provided module and returns the directory containing them"""
         # write example in the Go
-        ws = dag.module_workspace("go", "example", dependencies=[mod.source().directory(".")], dagger_version=self.dagger_version)
+        example_lang = "go"
+        ws = dag.module_workspace(example_lang, "example", dependencies=[mod.source().directory(".")], dagger_version=self.dagger_version)
         source_mod_schema = await dag.module_helper().get_module_schema(mod)
         example_work = (
             dag
             .llm(model=self.model)
             .with_module_workspace(ws)
-            .with_prompt(await ws.get_sdk_reference("go"))
+            .with_prompt(await ws.get_sdk_reference(example_lang))
             .with_prompt_var("source_mod_schema", source_mod_schema)
             .with_prompt_file(dag.current_module().source().file("prompt_exampler.txt"))
             .module_workspace()
@@ -63,10 +64,10 @@ class DaggerProgrammer:
         # # make sure the first example works
         await example_work.test()
         example = example_work.workspace()
-        example_mod = self.convert_example_to_module(example, mod.source().directory("."), "go")
+        example_mod = self.convert_example_to_module(example, mod.source().directory("."), example_lang)
 
         # translate that example to the other languages
-        all_examples = dag.directory().with_directory("examples/go", example_mod)
+        all_examples = dag.directory().with_directory(f"examples/{example_lang}", example_mod)
 
         for sdk in ["python", "typescript"]: # , "php", "java"]: # started with Go
             translated_example = await self.translate(example_mod.as_module(), sdk)
