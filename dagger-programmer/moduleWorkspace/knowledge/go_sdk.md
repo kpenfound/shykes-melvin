@@ -24,6 +24,21 @@ myFile := dag.Container(). // *Container
     File("./some-file") // *File
 ```
 
+Calling a method that returns a scalar or list takes a `context.Context`
+argument and returns an `error`:
+
+```go
+stdout, err := dag.Container().
+    WithExec([]string{"echo", "Hello, world!"]).
+    Stdout(ctx)
+```
+
+Calling a field that returns `Void` just returns `error` instead of `(Void, error)`:
+
+```go
+err := service.Stop(ctx)
+```
+
 ## Arguments
 
 When a field's argument is non-null ('String!') and does not have a default

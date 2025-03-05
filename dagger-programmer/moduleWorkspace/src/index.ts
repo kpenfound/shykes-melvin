@@ -86,7 +86,7 @@ export class ModuleWorkspace {
       expect: ReturnType.Any,
     });
     if ((await functions.exitCode()) != 0) {
-      return await functions.stderr();
+      return this.trimDaggerError(await functions.stderr());
     }
     return "TEST PASSED"; // Just return passed. Functions output is confusing
   }
@@ -179,5 +179,14 @@ export class ModuleWorkspace {
         await dag.moduleHelper().getSdkMainFile(this.sdk, this.name),
       ),
     );
+  }
+
+  trimDaggerError(error: string): string {
+    const sep = "ModuleSource.asModule: Module!";
+    const parts = error.split(sep);
+    if (parts.length > 1) {
+      return parts[1];
+    }
+    return error;
   }
 }
