@@ -26,6 +26,8 @@ class DaggerProgrammer:
             dag
             .llm(model=self.model)
             .with_module_workspace(ws)
+            .with_prompt(await ws.get_sdk_reference(source_mod_sdk))
+            .with_prompt(await ws.get_sdk_reference(language))
             .with_prompt_var("language", language)
             .with_prompt_var("source_mod_sdk", source_mod_sdk)
             .with_prompt_var("source_mod_file", source_mod_file)
@@ -52,6 +54,7 @@ class DaggerProgrammer:
             dag
             .llm(model=self.model)
             .with_module_workspace(ws)
+            .with_prompt(await ws.get_sdk_reference("go"))
             .with_prompt_var("source_mod_schema", source_mod_schema)
             .with_prompt_file(dag.current_module().source().file("prompt_exampler.txt"))
             .module_workspace()
