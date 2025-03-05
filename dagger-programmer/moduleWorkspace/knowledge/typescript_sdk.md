@@ -3,7 +3,7 @@
 All queries chain from the global 'dag' variable
 Assume `dag` is available globally.
 
-In Typescript, you must `from dagger import dag, function, object_type` as well as the other Dagger types you are using.
+In Typescript, you must `import { dag, object, func } from "@dagger.io/dagger";` as well as the other Dagger types you are using.
 
 ## Chaining and Fields
 
